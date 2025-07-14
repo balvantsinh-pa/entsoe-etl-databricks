@@ -1,19 +1,24 @@
 """
 Utility functions for ENTSOE ETL pipeline.
 Includes date handling, logging, and retry mechanisms.
+Databricks-friendly utilities.
 """
 
 import logging
 import sys
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Tuple, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential
 import pytz
 
+from config import settings
+
 
 def setup_logging(level: str = "INFO") -> logging.Logger:
     """
     Set up logging configuration.
+    Databricks-friendly logging setup.
     
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -32,16 +37,42 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, level.upper()))
     
-    # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-    )
+    # Create formatter - Databricks-friendly format
+    if settings.is_databricks:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    else:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+        )
+    
     console_handler.setFormatter(formatter)
     
     # Add handler to logger
     logger.addHandler(console_handler)
     
     return logger
+
+
+def get_databricks_file_path(relative_path: str) -> str:
+    """
+    Get absolute file path for Databricks environment.
+    
+    Args:
+        relative_path: Relative path from repository root
+    
+    Returns:
+        Absolute path suitable for Databricks
+    """
+    if settings.is_databricks:
+        # In Databricks, files are typically in /Workspace/Repos/...
+        workspace_path = os.environ.get('DATABRICKS_WORKSPACE_PATH', '/Workspace')
+        repo_name = os.environ.get('DATABRICKS_REPO_NAME', 'entsoe-etl-databricks')
+        return os.path.join(workspace_path, 'Repos', repo_name, relative_path)
+    else:
+        # Local development
+        return os.path.abspath(relative_path)
 
 
 def get_date_range(start_date: str, end_date: str) -> List[datetime]:
@@ -174,4 +205,23 @@ def validate_dataframe(df, required_columns: List[str]) -> bool:
     if missing_columns:
         return False
     
-    return True 
+    return True
+
+
+def get_databricks_info() -> dict:
+    """
+    Get Databricks environment information.
+    
+    Returns:
+        Dictionary with Databricks environment details
+    """
+    info = {
+        'is_databricks': settings.is_databricks,
+        'runtime_version': os.environ.get('DATABRICKS_RUNTIME_VERSION'),
+        'workspace_url': os.environ.get('DATABRICKS_WORKSPACE_URL'),
+        'cluster_id': os.environ.get('DATABRICKS_CLUSTER_ID'),
+        'spark_home': os.environ.get('SPARK_HOME'),
+        'python_version': sys.version,
+        'working_directory': os.getcwd()
+    }
+    return info 

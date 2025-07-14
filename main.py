@@ -1,16 +1,18 @@
 """
 Main ETL orchestrator for ENTSOE data pipeline.
 Coordinates extraction, transformation, and loading of energy market data.
+Databricks-friendly ETL pipeline.
 """
 
 import argparse
 import logging
 import sys
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from config import settings
-from utils import setup_logging, get_date_range, parse_date_argument
+from utils import setup_logging, get_date_range, parse_date_argument, get_databricks_info
 from entsoe_api import ENTSOEAPIClient
 from transform import DataTransformer
 from load import DatabaseLoader
@@ -24,6 +26,12 @@ class ENTSOEETLPipeline:
         self.api_client = ENTSOEAPIClient()
         self.transformer = DataTransformer()
         self.loader = DatabaseLoader()
+        
+        # Log Databricks environment info
+        if settings.is_databricks:
+            self.logger.info("Running in Databricks environment")
+            databricks_info = get_databricks_info()
+            self.logger.info(f"Databricks info: {databricks_info}")
     
     def run_historical_etl(self, start_date: str = "2024-01-01", end_date: Optional[str] = None) -> bool:
         """

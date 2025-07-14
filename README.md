@@ -1,6 +1,6 @@
 # ENTSOE ETL Pipeline
 
-A production-grade Python ETL pipeline for extracting energy market data from the ENTSOE Transparency Platform API and loading it into PostgreSQL. Designed for deployment on Databricks Free Edition.
+A production-grade Python ETL pipeline for extracting energy market data from the ENTSOE Transparency Platform API and loading it into PostgreSQL. **Optimized for Databricks deployment** with enhanced environment detection and compatibility.
 
 ## 🎯 Overview
 
@@ -8,7 +8,18 @@ This ETL pipeline fetches historical and daily energy market data for Germany fr
 - **Balancing Reserves**: Primary, secondary, and tertiary reserve volumes
 - **Day-Ahead Prices**: Hourly electricity prices in EUR/MWh
 
-The pipeline is built with modular architecture, comprehensive error handling, and is ready for production deployment on Databricks.
+The pipeline is built with modular architecture, comprehensive error handling, and is **specifically optimized for Databricks Free Edition** deployment.
+
+## 🚀 Databricks Optimizations
+
+### Key Features for Databricks:
+- ✅ **Automatic environment detection** - Detects Databricks runtime automatically
+- ✅ **Databricks-friendly logging** - Simplified log format for Databricks notebooks
+- ✅ **Environment variable handling** - Works with Databricks cluster environment variables
+- ✅ **File path resolution** - Handles Databricks workspace file paths
+- ✅ **Compatible dependencies** - Version ranges tested with Databricks Runtime 13.3 LTS
+- ✅ **Initialization script** - `databricks_init.py` for environment testing
+- ✅ **Enhanced notebook** - Comprehensive Databricks deployment notebook
 
 ## 📁 Project Structure
 
@@ -19,8 +30,10 @@ entsoe-etl-databricks/
 ├── transform.py           # Data transformation and cleaning
 ├── load.py               # PostgreSQL database operations
 ├── utils.py              # Utility functions and helpers
-├── config.py             # Configuration management
-├── requirements.txt      # Python dependencies
+├── config.py             # Configuration management (Databricks-aware)
+├── databricks_init.py    # Databricks environment initialization
+├── requirements.txt      # Standard Python dependencies
+├── requirements-databricks.txt  # Databricks-compatible dependencies
 ├── env.example          # Environment variables template
 ├── README.md            # This file
 ├── .gitignore           # Git ignore patterns
@@ -34,12 +47,13 @@ entsoe-etl-databricks/
 
 ### 1. Prerequisites
 
-- Python 3.10+
+- Python 3.10+ (or Databricks Runtime 13.3 LTS)
 - PostgreSQL database
 - ENTSOE API key (free registration at [ENTSOE Transparency Platform](https://transparency.entsoe.eu))
 
 ### 2. Installation
 
+#### Local Development:
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/entsoe-etl-databricks.git
@@ -54,6 +68,12 @@ cp env.example .env
 # Edit .env with your configuration
 nano .env
 ```
+
+#### Databricks Deployment:
+1. Import repository into Databricks Repos
+2. Use `requirements-databricks.txt` for package installation
+3. Set environment variables in cluster configuration
+4. Run `databricks_init.py` to test environment
 
 ### 3. Configuration
 
@@ -138,6 +158,7 @@ Options:
    - Orchestrates the entire ETL process
    - Handles error recovery and logging
    - Supports both daily and historical modes
+   - **Databricks environment detection**
 
 ### Data Flow
 
@@ -153,6 +174,13 @@ Run the unit tests:
 
 ```bash
 python -m pytest tests/ -v
+```
+
+### Databricks Environment Testing
+
+```bash
+# Test Databricks environment setup
+python databricks_init.py
 ```
 
 ## 🚀 Databricks Deployment
@@ -175,8 +203,8 @@ python -m pytest tests/ -v
 Create a notebook to install dependencies:
 
 ```python
-# Install required packages
-%pip install requests==2.31.0 xmltodict==0.13.0 pandas==2.1.4 psycopg2-binary==2.9.9 python-dotenv==1.0.0 pytz==2023.3 pydantic==2.5.2 tenacity==8.2.3
+# Install Databricks-compatible packages
+%pip install -r requirements-databricks.txt
 ```
 
 ### 4. Configure Environment Variables
@@ -191,19 +219,26 @@ COUNTRY_CODE=DE
 LOG_LEVEL=INFO
 ```
 
-### 5. Run ETL Pipeline
+### 5. Initialize Environment
+
+```python
+# Run the Databricks initialization script
+%run /Workspace/Repos/your-repo-name/databricks_init.py
+```
+
+### 6. Run ETL Pipeline
 
 Use the provided notebook `notebooks/deploy_to_databricks.ipynb` or create your own:
 
 ```python
 # Run daily ETL
-%run /Repos/your-repo/main.py --mode daily
+%run /Workspace/Repos/your-repo-name/main.py --mode daily
 
 # Run historical ETL
-%run /Repos/your-repo/main.py --mode historical --start-date 2024-01-01 --end-date 2024-01-31
+%run /Workspace/Repos/your-repo-name/main.py --mode historical --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
-### 6. Schedule Jobs
+### 7. Schedule Jobs
 
 1. Go to **Workflows** → **Jobs**
 2. Create a new job
@@ -249,6 +284,13 @@ Use the provided notebook `notebooks/deploy_to_databricks.ipynb` or create your 
 | `RETRY_DELAY` | No | `5` | Retry delay in seconds |
 | `REQUEST_TIMEOUT` | No | `30` | API request timeout |
 
+### Databricks-Specific Features
+
+- **Automatic Environment Detection**: Detects Databricks runtime automatically
+- **Simplified Logging**: Databricks-friendly log format
+- **File Path Resolution**: Handles Databricks workspace paths
+- **Environment Variables**: Works with Databricks cluster environment variables
+
 ## 🛠️ Development
 
 ### Adding New Countries
@@ -273,6 +315,8 @@ The pipeline uses structured logging with the following levels:
 - `ERROR`: Errors that don't stop the pipeline
 - `CRITICAL`: Critical errors that stop execution
 
+**Databricks Optimization**: Simplified log format for better readability in Databricks notebooks.
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -290,7 +334,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 For issues and questions:
 1. Check the [ENTSOE API documentation](https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html)
 2. Review the logs for error details
-3. Open an issue on GitHub
+3. Run `databricks_init.py` to diagnose environment issues
+4. Open an issue on GitHub
 
 ## 🔗 Links
 
