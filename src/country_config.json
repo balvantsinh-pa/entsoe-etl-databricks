@@ -1,0 +1,69 @@
+{
+  "countries": {
+    "DE": {
+      "name": "Germany",
+      "eic_code": "10Y1001A1001A82H",
+      "timezone": "Europe/Berlin",
+      "currency": "EUR"
+    },
+    "FR": {
+      "name": "France",
+      "eic_code": "10YFR-RTE------C",
+      "timezone": "Europe/Paris",
+      "currency": "EUR"
+    },
+    "IT": {
+      "name": "Italy",
+      "eic_code": "10YIT-GRTN-----B",
+      "timezone": "Europe/Rome",
+      "currency": "EUR"
+    },
+    "ES": {
+      "name": "Spain",
+      "eic_code": "10YES-REE------0",
+      "timezone": "Europe/Madrid",
+      "currency": "EUR"
+    },
+    "NL": {
+      "name": "Netherlands",
+      "eic_code": "10YNL----------L",
+      "timezone": "Europe/Amsterdam",
+      "currency": "EUR"
+    },
+    "BE": {
+      "name": "Belgium",
+      "eic_code": "10YBE----------2",
+      "timezone": "Europe/Brussels",
+      "currency": "EUR"
+    },
+    "AT": {
+      "name": "Austria",
+      "eic_code": "10YAT-APG------L",
+      "timezone": "Europe/Vienna",
+      "currency": "EUR"
+    },
+    "CH": {
+      "name": "Switzerland",
+      "eic_code": "10YCH-SWISSGRIDZ",
+      "timezone": "Europe/Zurich",
+      "currency": "CHF"
+    },
+    "PL": {
+      "name": "Poland",
+      "eic_code": "10YPL-AREA-----S",
+      "timezone": "Europe/Warsaw",
+      "currency": "PLN"
+    },
+    "CZ": {
+      "name": "Czech Republic",
+      "eic_code": "10YCZ-CEPS-----N",
+      "timezone": "Europe/Prague",
+      "currency": "CZK"
+    }
+  },
+  "default_country": "DE",
+  "api_endpoints": {
+    "balancing_reserves": "https://transparency.entsoe.eu/balancing/r2/amountAndPricesPaidOfBalancingReservesUnderContract/show",
+    "day_ahead_prices": "https://transparency.entsoe.eu/transmission-domain/r2/dayAheadPrices/show"
+  }
+} 

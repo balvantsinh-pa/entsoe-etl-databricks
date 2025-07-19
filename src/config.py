@@ -5,7 +5,8 @@ Databricks-friendly configuration handling.
 """
 
 import os
-from typing import Optional
+import json
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from pydantic import BaseSettings, validator
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     # ENTSOE API Configuration
     entsoe_api_key: str
     entsoe_base_url: str = "https://transparency.entsoe.eu/api"
+    entsoe_headers: Dict[str, str] = {"Accept": "application/xml"}
     
     # Database Configuration
     database_url: str
@@ -40,6 +42,10 @@ class Settings(BaseSettings):
     is_databricks: bool = False
     databricks_workspace_url: Optional[str] = None
     databricks_cluster_id: Optional[str] = None
+    
+    # ETL Configuration
+    batch_size_days: int = 7  # Process data in 1-week chunks
+    default_start_date: str = "2024-01-01"
     
     @validator('entsoe_api_key')
     def validate_api_key(cls, v):
@@ -78,6 +84,71 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+
+def load_country_config() -> Dict[str, Any]:
+    """
+    Load country configuration from JSON file.
+    
+    Returns:
+        Dictionary with country configurations
+    """
+    config_path = os.path.join(os.path.dirname(__file__), 'country_config.json')
+    
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Country configuration file not found: {config_path}")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in country configuration: {e}")
+
+
+def get_country_info(country_code: str = None) -> Dict[str, Any]:
+    """
+    Get information for a specific country.
+    
+    Args:
+        country_code: Country code (e.g., 'DE'). If None, uses default.
+    
+    Returns:
+        Dictionary with country information
+    """
+    config = load_country_config()
+    
+    if country_code is None:
+        country_code = config.get('default_country', 'DE')
+    
+    country_info = config['countries'].get(country_code)
+    if not country_info:
+        raise ValueError(f"Country code '{country_code}' not found in configuration")
+    
+    return {
+        'code': country_code,
+        **country_info
+    }
+
+
+def get_all_countries() -> Dict[str, Dict[str, Any]]:
+    """
+    Get all available countries.
+    
+    Returns:
+        Dictionary with all country configurations
+    """
+    config = load_country_config()
+    return config['countries']
+
+
+def get_api_endpoints() -> Dict[str, str]:
+    """
+    Get API endpoints from configuration.
+    
+    Returns:
+        Dictionary with API endpoints
+    """
+    config = load_country_config()
+    return config.get('api_endpoints', {})
 
 
 # Global settings instance

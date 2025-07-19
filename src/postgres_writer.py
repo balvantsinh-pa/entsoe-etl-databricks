@@ -1,6 +1,7 @@
 """
 Database loading module for ENTSOE ETL pipeline.
 Handles PostgreSQL operations using psycopg2.
+Updated for new schema with reserve_type and amount_mw columns.
 """
 
 import logging
@@ -16,12 +17,12 @@ from config import settings
 from utils import validate_dataframe
 
 
-class DatabaseLoader:
+class PostgresWriter:
     """Handles database operations for the ETL pipeline."""
     
     def __init__(self):
         self.database_url = settings.database_url
-        self.logger = logging.getLogger("entsoe_etl.load")
+        self.logger = logging.getLogger("entsoe_etl.postgres_writer")
         self.engine = None
     
     def _get_engine(self):
@@ -55,6 +56,7 @@ class DatabaseLoader:
     def create_tables(self) -> bool:
         """
         Create database tables if they don't exist.
+        Uses the new schema with reserve_type and amount_mw columns.
         
         Returns:
             True if tables created successfully, False otherwise
@@ -62,17 +64,17 @@ class DatabaseLoader:
         try:
             engine = self._get_engine()
             
-            # SQL for creating tables
+            # SQL for creating tables with new schema
             balancing_reserves_sql = """
             CREATE TABLE IF NOT EXISTS balancing_reserves (
                 id SERIAL PRIMARY KEY,
                 country_code VARCHAR(10) NOT NULL,
                 datetime_utc TIMESTAMP WITH TIME ZONE NOT NULL,
-                product VARCHAR(100) NOT NULL,
-                volume_mw DECIMAL(10, 2),
-                price_eur_per_mw DECIMAL(10, 2),
-                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                UNIQUE(country_code, datetime_utc, product)
+                reserve_type TEXT NOT NULL,
+                amount_mw FLOAT,
+                price_eur FLOAT,
+                inserted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(country_code, datetime_utc, reserve_type)
             );
             """
             
@@ -81,8 +83,8 @@ class DatabaseLoader:
                 id SERIAL PRIMARY KEY,
                 country_code VARCHAR(10) NOT NULL,
                 datetime_utc TIMESTAMP WITH TIME ZONE NOT NULL,
-                price_eur_per_mwh DECIMAL(10, 2) NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                price_eur_per_mwh FLOAT NOT NULL,
+                inserted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                 UNIQUE(country_code, datetime_utc)
             );
             """
@@ -95,8 +97,8 @@ class DatabaseLoader:
             CREATE INDEX IF NOT EXISTS idx_balancing_reserves_country 
             ON balancing_reserves(country_code);
             
-            CREATE INDEX IF NOT EXISTS idx_balancing_reserves_product 
-            ON balancing_reserves(product);
+            CREATE INDEX IF NOT EXISTS idx_balancing_reserves_type 
+            ON balancing_reserves(reserve_type);
             """
             
             day_ahead_prices_indexes = """
@@ -125,22 +127,23 @@ class DatabaseLoader:
             self.logger.error(f"Failed to create database tables: {e}")
             return False
     
-    def load_balancing_reserves(self, df: pd.DataFrame) -> bool:
+    def write_balancing_reserves(self, df: pd.DataFrame) -> bool:
         """
-        Load balancing reserves data into PostgreSQL.
+        Write balancing reserves data to PostgreSQL.
+        Updated for new schema with reserve_type and amount_mw.
         
         Args:
             df: DataFrame with balancing reserves data
         
         Returns:
-            True if load successful, False otherwise
+            True if write successful, False otherwise
         """
         if df.empty:
             self.logger.warning("Empty balancing reserves DataFrame provided")
             return True
         
         # Validate DataFrame
-        required_columns = ['country_code', 'datetime_utc', 'product', 'volume_mw', 'created_at']
+        required_columns = ['country_code', 'datetime_utc', 'reserve_type', 'amount_mw', 'inserted_at']
         if not validate_dataframe(df, required_columns):
             self.logger.error("Invalid balancing reserves DataFrame")
             return False
@@ -154,10 +157,10 @@ class DatabaseLoader:
                 data_to_insert.append({
                     'country_code': row['country_code'],
                     'datetime_utc': row['datetime_utc'],
-                    'product': row['product'],
-                    'volume_mw': row['volume_mw'],
-                    'price_eur_per_mw': row.get('price_eur_per_mw'),
-                    'created_at': row['created_at']
+                    'reserve_type': row['reserve_type'],
+                    'amount_mw': row['amount_mw'],
+                    'price_eur': row.get('price_eur'),
+                    'inserted_at': row['inserted_at']
                 })
             
             # Insert data using pandas to_sql with conflict resolution
@@ -176,14 +179,14 @@ class DatabaseLoader:
                 # Merge data using SQL
                 merge_sql = """
                 INSERT INTO balancing_reserves 
-                (country_code, datetime_utc, product, volume_mw, price_eur_per_mw, created_at)
-                SELECT country_code, datetime_utc, product, volume_mw, price_eur_per_mw, created_at
+                (country_code, datetime_utc, reserve_type, amount_mw, price_eur, inserted_at)
+                SELECT country_code, datetime_utc, reserve_type, amount_mw, price_eur, inserted_at
                 FROM balancing_reserves_temp
-                ON CONFLICT (country_code, datetime_utc, product)
+                ON CONFLICT (country_code, datetime_utc, reserve_type)
                 DO UPDATE SET
-                    volume_mw = EXCLUDED.volume_mw,
-                    price_eur_per_mw = EXCLUDED.price_eur_per_mw,
-                    created_at = EXCLUDED.created_at;
+                    amount_mw = EXCLUDED.amount_mw,
+                    price_eur = EXCLUDED.price_eur,
+                    inserted_at = EXCLUDED.inserted_at;
                 """
                 
                 conn.execute(text(merge_sql))
@@ -193,29 +196,29 @@ class DatabaseLoader:
                 
                 conn.commit()
             
-            self.logger.info(f"Successfully loaded {len(df)} balancing reserves records")
+            self.logger.info(f"Successfully wrote {len(df)} balancing reserves records")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to load balancing reserves data: {e}")
+            self.logger.error(f"Failed to write balancing reserves data: {e}")
             return False
     
-    def load_day_ahead_prices(self, df: pd.DataFrame) -> bool:
+    def write_day_ahead_prices(self, df: pd.DataFrame) -> bool:
         """
-        Load day-ahead prices data into PostgreSQL.
+        Write day-ahead prices data to PostgreSQL.
         
         Args:
             df: DataFrame with day-ahead prices data
         
         Returns:
-            True if load successful, False otherwise
+            True if write successful, False otherwise
         """
         if df.empty:
             self.logger.warning("Empty day-ahead prices DataFrame provided")
             return True
         
         # Validate DataFrame
-        required_columns = ['country_code', 'datetime_utc', 'price_eur_per_mwh', 'created_at']
+        required_columns = ['country_code', 'datetime_utc', 'price_eur_per_mwh', 'inserted_at']
         if not validate_dataframe(df, required_columns):
             self.logger.error("Invalid day-ahead prices DataFrame")
             return False
@@ -230,7 +233,7 @@ class DatabaseLoader:
                     'country_code': row['country_code'],
                     'datetime_utc': row['datetime_utc'],
                     'price_eur_per_mwh': row['price_eur_per_mwh'],
-                    'created_at': row['created_at']
+                    'inserted_at': row['inserted_at']
                 })
             
             # Insert data using pandas to_sql with conflict resolution
@@ -249,13 +252,13 @@ class DatabaseLoader:
                 # Merge data using SQL
                 merge_sql = """
                 INSERT INTO day_ahead_prices 
-                (country_code, datetime_utc, price_eur_per_mwh, created_at)
-                SELECT country_code, datetime_utc, price_eur_per_mwh, created_at
+                (country_code, datetime_utc, price_eur_per_mwh, inserted_at)
+                SELECT country_code, datetime_utc, price_eur_per_mwh, inserted_at
                 FROM day_ahead_prices_temp
                 ON CONFLICT (country_code, datetime_utc)
                 DO UPDATE SET
                     price_eur_per_mwh = EXCLUDED.price_eur_per_mwh,
-                    created_at = EXCLUDED.created_at;
+                    inserted_at = EXCLUDED.inserted_at;
                 """
                 
                 conn.execute(text(merge_sql))
@@ -265,11 +268,11 @@ class DatabaseLoader:
                 
                 conn.commit()
             
-            self.logger.info(f"Successfully loaded {len(df)} day-ahead prices records")
+            self.logger.info(f"Successfully wrote {len(df)} day-ahead prices records")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to load day-ahead prices data: {e}")
+            self.logger.error(f"Failed to write day-ahead prices data: {e}")
             return False
     
     def get_table_stats(self) -> Dict[str, Any]:
@@ -291,7 +294,7 @@ class DatabaseLoader:
                         COUNT(*) as total_records,
                         MIN(datetime_utc) as earliest_date,
                         MAX(datetime_utc) as latest_date,
-                        COUNT(DISTINCT product) as unique_products
+                        COUNT(DISTINCT reserve_type) as unique_reserve_types
                     FROM balancing_reserves
                 """)).fetchone()
                 
@@ -299,7 +302,7 @@ class DatabaseLoader:
                     'total_records': br_stats[0],
                     'earliest_date': br_stats[1].isoformat() if br_stats[1] else None,
                     'latest_date': br_stats[2].isoformat() if br_stats[2] else None,
-                    'unique_products': br_stats[3]
+                    'unique_reserve_types': br_stats[3]
                 }
                 
                 # Get day-ahead prices stats

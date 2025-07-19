@@ -1,55 +1,66 @@
 # ENTSOE ETL Pipeline
 
-A production-grade Python ETL pipeline for extracting energy market data from the ENTSOE Transparency Platform API and loading it into PostgreSQL. **Optimized for Databricks deployment** with enhanced environment detection and compatibility.
+A production-grade Python ETL pipeline for extracting energy market data from the ENTSOE Transparency Platform API and loading it into PostgreSQL. **Optimized for Databricks Free Edition** with a Databricks-native notebook approach.
 
 ## 🎯 Overview
 
-This ETL pipeline fetches historical and daily energy market data for Germany from the ENTSOE Transparency Platform, including:
-- **Balancing Reserves**: Primary, secondary, and tertiary reserve volumes
+This ETL pipeline fetches historical and daily energy market data for multiple European countries from the ENTSOE Transparency Platform, including:
+- **Balancing Reserves**: Primary, secondary, and tertiary reserve volumes and prices
 - **Day-Ahead Prices**: Hourly electricity prices in EUR/MWh
 
-The pipeline is built with modular architecture, comprehensive error handling, and is **specifically optimized for Databricks Free Edition** deployment.
+The pipeline is built with **Databricks-native architecture**, modular design, comprehensive error handling, and is specifically optimized for Databricks Free Edition deployment.
 
-## 🚀 Databricks Optimizations
+## 🚀 Databricks-Native Features
 
 ### Key Features for Databricks:
+- ✅ **Notebook-based ETL** - Separate notebooks for historical and daily processing
 - ✅ **Automatic environment detection** - Detects Databricks runtime automatically
 - ✅ **Databricks-friendly logging** - Simplified log format for Databricks notebooks
 - ✅ **Environment variable handling** - Works with Databricks cluster environment variables
 - ✅ **File path resolution** - Handles Databricks workspace file paths
 - ✅ **Compatible dependencies** - Version ranges tested with Databricks Runtime 13.3 LTS
-- ✅ **Initialization script** - `databricks_init.py` for environment testing
-- ✅ **Enhanced notebook** - Comprehensive Databricks deployment notebook
+- ✅ **Job scheduling** - Ready for Databricks Jobs with cron scheduling
+- ✅ **CI/CD integration** - GitHub Actions for automated deployment
 
 ## 📁 Project Structure
 
 ```
 entsoe-etl-databricks/
-├── main.py                 # Main ETL orchestrator
-├── entsoe_api.py          # ENTSOE API client
-├── transform.py           # Data transformation and cleaning
-├── load.py               # PostgreSQL database operations
-├── utils.py              # Utility functions and helpers
-├── config.py             # Configuration management (Databricks-aware)
+├── src/                    # Core Python modules
+│   ├── config.py          # Configuration management (Databricks-aware)
+│   ├── entsoe_api.py      # ENTSOE API client
+│   ├── transform.py       # Data transformation and cleaning
+│   ├── postgres_writer.py # PostgreSQL database operations
+│   ├── utils.py           # Utility functions and helpers
+│   └── country_config.json # Country configurations
+├── notebooks/             # Databricks notebooks
+│   ├── historical_etl.ipynb  # Historical data processing
+│   └── daily_etl.ipynb       # Daily data processing
+├── dags/                  # Databricks job configurations
+│   └── databricks_job_config.json
+├── tests/                 # Unit tests
+│   └── test_entsoe_api.py
+├── .github/               # CI/CD workflows
+│   └── workflows/
+│       └── ci-cd.yml
+├── schema.sql            # PostgreSQL table schema
+├── main.py               # Local development script
 ├── databricks_init.py    # Databricks environment initialization
 ├── requirements.txt      # Standard Python dependencies
 ├── requirements-databricks.txt  # Databricks-compatible dependencies
 ├── env.example          # Environment variables template
 ├── README.md            # This file
-├── .gitignore           # Git ignore patterns
-├── tests/               # Unit tests
-│   └── test_entsoe_api.py
-└── notebooks/           # Databricks notebooks
-    └── deploy_to_databricks.ipynb
+└── .gitignore           # Git ignore patterns
 ```
 
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
 
-- Python 3.10+ (or Databricks Runtime 13.3 LTS)
-- PostgreSQL database
-- ENTSOE API key (free registration at [ENTSOE Transparency Platform](https://transparency.entsoe.eu))
+- **Databricks Free Edition** (Community Edition)
+- **Python 3.10+** (or Databricks Runtime 13.3 LTS)
+- **PostgreSQL database** (Supabase recommended)
+- **ENTSOE API key** (free registration at [ENTSOE Transparency Platform](https://transparency.entsoe.eu))
 
 ### 2. Installation
 
@@ -94,31 +105,57 @@ LOG_LEVEL=INFO
 
 ### 4. Database Setup
 
-The pipeline will automatically create the required tables:
+Run the schema file to create the required tables:
 
+```sql
+-- Execute schema.sql in your PostgreSQL database
+\i schema.sql
+```
+
+The pipeline will automatically create:
 - `balancing_reserves`: Balancing reserve volumes and prices
 - `day_ahead_prices`: Day-ahead electricity prices
 
 ## 📊 Usage
 
-### Daily ETL (Yesterday's Data)
+### Databricks Notebooks (Recommended)
 
+#### Historical ETL (1 Jan 2024 to Yesterday)
+```python
+# In Databricks notebook
+%run /Workspace/Repos/your-repo-name/notebooks/historical_etl
+```
+
+#### Daily ETL (Yesterday's Data)
+```python
+# In Databricks notebook
+%run /Workspace/Repos/your-repo-name/notebooks/daily_etl
+```
+
+### Local Development
+
+#### Daily ETL (Yesterday's Data)
 ```bash
 # Run for yesterday (default)
 python main.py --mode daily
 
 # Run for specific date
 python main.py --mode daily --date 2024-01-15
+
+# Run for specific country
+python main.py --mode daily --country FR
 ```
 
-### Historical ETL (Date Range)
-
+#### Historical ETL (Date Range)
 ```bash
 # Run from 2024-01-01 to today
 python main.py --mode historical
 
 # Run for specific date range
 python main.py --mode historical --start-date 2024-01-01 --end-date 2024-01-31
+
+# Run for specific country
+python main.py --mode historical --country DE
 ```
 
 ### Command Line Options
@@ -130,35 +167,35 @@ python main.py --help
 Options:
 - `--mode`: `daily` or `historical` (default: daily)
 - `--date`: Specific date in YYYY-MM-DD format or "daily"
-- `--start-date`: Start date for historical mode (default: 2024-01-01)
+- `--start-date`: Start date for historical mode
 - `--end-date`: End date for historical mode (default: today)
+- `--country`: Country code (e.g., DE, FR, IT). Defaults to DE
 
 ## 🏗️ Architecture
 
 ### Core Components
 
-1. **ENTSOEAPIClient** (`entsoe_api.py`)
+1. **ENTSOEAPIClient** (`src/entsoe_api.py`)
    - Handles API requests with retry logic
    - Parses XML responses into pandas DataFrames
+   - Supports multiple countries via configuration
    - Supports balancing reserves and day-ahead prices
 
-2. **DataTransformer** (`transform.py`)
+2. **DataTransformer** (`src/transform.py`)
    - Normalizes timestamps to UTC
    - Handles DST conversion
    - Removes invalid records and duplicates
    - Validates data quality
 
-3. **DatabaseLoader** (`load.py`)
+3. **PostgresWriter** (`src/postgres_writer.py`)
    - Manages PostgreSQL connections
    - Creates tables and indexes
    - Handles upsert operations
    - Provides database statistics
 
-4. **ENTSOEETLPipeline** (`main.py`)
-   - Orchestrates the entire ETL process
-   - Handles error recovery and logging
-   - Supports both daily and historical modes
-   - **Databricks environment detection**
+4. **Databricks Notebooks** (`notebooks/`)
+   - **historical_etl.ipynb**: Processes historical data in batches
+   - **daily_etl.ipynb**: Processes daily data for job scheduling
 
 ### Data Flow
 
@@ -228,22 +265,25 @@ LOG_LEVEL=INFO
 
 ### 6. Run ETL Pipeline
 
-Use the provided notebook `notebooks/deploy_to_databricks.ipynb` or create your own:
-
+#### Historical ETL (One-time)
 ```python
-# Run daily ETL
-%run /Workspace/Repos/your-repo-name/main.py --mode daily
+# Run historical ETL notebook
+%run /Workspace/Repos/your-repo-name/notebooks/historical_etl
+```
 
-# Run historical ETL
-%run /Workspace/Repos/your-repo-name/main.py --mode historical --start-date 2024-01-01 --end-date 2024-01-31
+#### Daily ETL (Scheduled)
+```python
+# Run daily ETL notebook
+%run /Workspace/Repos/your-repo-name/notebooks/daily_etl
 ```
 
 ### 7. Schedule Jobs
 
 1. Go to **Workflows** → **Jobs**
 2. Create a new job
-3. Add a notebook task pointing to your ETL notebook
-4. Set up a schedule (e.g., daily at 2 AM UTC)
+3. Add a notebook task pointing to `notebooks/daily_etl`
+4. Set up a schedule (e.g., daily at 4:00 UTC)
+5. Use the provided job configuration in `dags/databricks_job_config.json`
 
 ## 📈 Database Schema
 
@@ -252,22 +292,22 @@ Use the provided notebook `notebooks/deploy_to_databricks.ipynb` or create your 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | SERIAL | Primary key |
-| country_code | VARCHAR(10) | Country code (DE) |
+| country_code | VARCHAR(10) | Country code (DE, FR, etc.) |
 | datetime_utc | TIMESTAMP WITH TIME ZONE | UTC timestamp |
-| product | VARCHAR(100) | Reserve product type |
-| volume_mw | DECIMAL(10,2) | Volume in MW |
-| price_eur_per_mw | DECIMAL(10,2) | Price in EUR/MW (nullable) |
-| created_at | TIMESTAMP WITH TIME ZONE | Record creation time |
+| reserve_type | TEXT | Reserve type (Primary, Secondary, Tertiary) |
+| amount_mw | FLOAT | Amount in MW |
+| price_eur | FLOAT | Price in EUR (nullable) |
+| inserted_at | TIMESTAMP WITH TIME ZONE | Record creation time |
 
 ### day_ahead_prices
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | SERIAL | Primary key |
-| country_code | VARCHAR(10) | Country code (DE) |
+| country_code | VARCHAR(10) | Country code (DE, FR, etc.) |
 | datetime_utc | TIMESTAMP WITH TIME ZONE | UTC timestamp |
-| price_eur_per_mwh | DECIMAL(10,2) | Price in EUR/MWh |
-| created_at | TIMESTAMP WITH TIME ZONE | Record creation time |
+| price_eur_per_mwh | FLOAT | Price in EUR/MWh |
+| inserted_at | TIMESTAMP WITH TIME ZONE | Record creation time |
 
 ## 🔧 Configuration
 
@@ -284,27 +324,50 @@ Use the provided notebook `notebooks/deploy_to_databricks.ipynb` or create your 
 | `RETRY_DELAY` | No | `5` | Retry delay in seconds |
 | `REQUEST_TIMEOUT` | No | `30` | API request timeout |
 
-### Databricks-Specific Features
+### Supported Countries
 
-- **Automatic Environment Detection**: Detects Databricks runtime automatically
-- **Simplified Logging**: Databricks-friendly log format
-- **File Path Resolution**: Handles Databricks workspace paths
-- **Environment Variables**: Works with Databricks cluster environment variables
+The pipeline supports multiple European countries:
+
+- **Germany (DE)**: `10Y1001A1001A82H`
+- **France (FR)**: `10YFR-RTE------C`
+- **Italy (IT)**: `10YIT-GRTN-----B`
+- **Spain (ES)**: `10YES-REE------0`
+- **Netherlands (NL)**: `10YNL----------L`
+- **Belgium (BE)**: `10YBE----------2`
+- **Austria (AT)**: `10YAT-APG------L`
+- **Switzerland (CH)**: `10YCH-SWISSGRIDZ`
+- **Poland (PL)**: `10YPL-AREA-----S`
+- **Czech Republic (CZ)**: `10YCZ-CEPS-----N`
+
+## 🔄 CI/CD Pipeline
+
+The project includes GitHub Actions for automated testing and deployment:
+
+### Workflow Jobs:
+1. **Validate**: Code linting and unit tests
+2. **Security**: Security checks with Bandit and secret detection
+3. **Databricks Deploy**: Automated deployment to Databricks
+
+### Setup CI/CD:
+1. Add repository secrets:
+   - `DATABRICKS_HOST`: Your Databricks workspace URL
+   - `DATABRICKS_TOKEN`: Your Databricks access token
+
+2. Push to main branch to trigger deployment
 
 ## 🛠️ Development
 
 ### Adding New Countries
 
-1. Update `config.py` with new country EIC codes
-2. Modify `entsoe_api.py` to support multiple countries
-3. Update database schema if needed
+1. Update `src/country_config.json` with new country EIC codes
+2. The pipeline automatically supports new countries
 
 ### Adding New Data Types
 
-1. Add new document types in `entsoe_api.py`
-2. Create corresponding transformation methods in `transform.py`
-3. Add database table and loading logic in `load.py`
-4. Update main pipeline in `main.py`
+1. Add new document types in `src/entsoe_api.py`
+2. Create corresponding transformation methods in `src/transform.py`
+3. Add database table and loading logic in `src/postgres_writer.py`
+4. Update notebooks for new data types
 
 ## 📝 Logging
 
@@ -342,4 +405,5 @@ For issues and questions:
 - [ENTSOE Transparency Platform](https://transparency.entsoe.eu)
 - [ENTSOE API Documentation](https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html)
 - [Databricks Documentation](https://docs.databricks.com)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/) 
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Supabase Documentation](https://supabase.com/docs) 

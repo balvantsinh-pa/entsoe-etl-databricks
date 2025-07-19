@@ -1,7 +1,7 @@
 """
 Main ETL orchestrator for ENTSOE data pipeline.
 Coordinates extraction, transformation, and loading of energy market data.
-Databricks-friendly ETL pipeline.
+Updated for new src/ structure and Databricks-friendly ETL pipeline.
 """
 
 import argparse
@@ -11,21 +11,25 @@ import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from config import settings
-from utils import setup_logging, get_date_range, parse_date_argument, get_databricks_info
+# Add src directory to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+
+from config import settings, get_country_info, get_databricks_info
+from utils import setup_logging, get_date_range, parse_date_argument
 from entsoe_api import ENTSOEAPIClient
 from transform import DataTransformer
-from load import DatabaseLoader
+from postgres_writer import PostgresWriter
 
 
 class ENTSOEETLPipeline:
     """Main ETL pipeline orchestrator."""
     
-    def __init__(self):
+    def __init__(self, country_code: str = None):
         self.logger = setup_logging(settings.log_level)
-        self.api_client = ENTSOEAPIClient()
+        self.country_info = get_country_info(country_code)
+        self.api_client = ENTSOEAPIClient(country_code=self.country_info['code'])
         self.transformer = DataTransformer()
-        self.loader = DatabaseLoader()
+        self.loader = PostgresWriter()
         
         # Log Databricks environment info
         if settings.is_databricks:
@@ -33,23 +37,28 @@ class ENTSOEETLPipeline:
             databricks_info = get_databricks_info()
             self.logger.info(f"Databricks info: {databricks_info}")
     
-    def run_historical_etl(self, start_date: str = "2024-01-01", end_date: Optional[str] = None) -> bool:
+    def run_historical_etl(self, start_date: str = None, end_date: Optional[str] = None) -> bool:
         """
         Run ETL pipeline for historical data.
         
         Args:
-            start_date: Start date in YYYY-MM-DD format
+            start_date: Start date in YYYY-MM-DD format (defaults to config default)
             end_date: End date in YYYY-MM-DD format (defaults to today)
         
         Returns:
             True if successful, False otherwise
         """
         try:
+            # Set default start date if not provided
+            if start_date is None:
+                start_date = settings.default_start_date
+            
             # Set end date to today if not provided
             if end_date is None:
                 end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             
             self.logger.info(f"Starting historical ETL from {start_date} to {end_date}")
+            self.logger.info(f"Target country: {self.country_info['name']} ({self.country_info['code']})")
             
             # Get date range
             dates = get_date_range(start_date, end_date)
@@ -103,6 +112,7 @@ class ENTSOEETLPipeline:
             start_date, end_date = parse_date_argument(date_arg)
             
             self.logger.info(f"Starting daily ETL for {start_date.strftime('%Y-%m-%d')}")
+            self.logger.info(f"Target country: {self.country_info['name']} ({self.country_info['code']})")
             
             # Initialize database
             if not self._initialize_database():
@@ -177,8 +187,8 @@ class ENTSOEETLPipeline:
                     return False
             
             # Load data
-            br_success = self.loader.load_balancing_reserves(balancing_reserves_df)
-            dap_success = self.loader.load_day_ahead_prices(day_ahead_prices_df)
+            br_success = self.loader.write_balancing_reserves(balancing_reserves_df)
+            dap_success = self.loader.write_day_ahead_prices(day_ahead_prices_df)
             
             if not br_success or not dap_success:
                 self.logger.error("Data loading failed")
@@ -251,7 +261,6 @@ def main():
     parser.add_argument(
         "--start-date",
         type=str,
-        default="2024-01-01",
         help="Start date for historical mode (YYYY-MM-DD)"
     )
     parser.add_argument(
@@ -259,11 +268,16 @@ def main():
         type=str,
         help="End date for historical mode (YYYY-MM-DD, defaults to today)"
     )
+    parser.add_argument(
+        "--country",
+        type=str,
+        help="Country code (e.g., DE, FR, IT). Defaults to DE"
+    )
     
     args = parser.parse_args()
     
     # Create pipeline instance
-    pipeline = ENTSOEETLPipeline()
+    pipeline = ENTSOEETLPipeline(country_code=args.country)
     
     try:
         # Run pipeline based on mode

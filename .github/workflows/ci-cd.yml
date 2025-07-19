@@ -1,0 +1,95 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 pytest pytest-cov
+      
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=src --cov-report=xml
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Run Bandit security checks
+        run: |
+          pip install bandit
+          bandit -r src/ -f json -o bandit-report.json || true
+      
+      - name: Check for secrets in code
+        run: |
+          pip install detect-secrets
+          detect-secrets scan src/ > secrets-report.json || true
+
+  databricks-deploy:
+    runs-on: ubuntu-latest
+    needs: [validate, security]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Databricks CLI
+        run: |
+          pip install databricks-cli
+      
+      - name: Configure Databricks CLI
+        run: |
+          echo ${{ secrets.DATABRICKS_HOST }} | databricks configure --token
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      
+      - name: Deploy to Databricks
+        run: |
+          # Deploy notebooks
+          databricks workspace import_dir notebooks /Workspace/Repos/entsoe-etl-databricks/notebooks
+          
+          # Deploy source code
+          databricks workspace import_dir src /Workspace/Repos/entsoe-etl-databricks/src
+          
+          # Create/update job
+          databricks jobs create --json-file dags/databricks_job_config.json 

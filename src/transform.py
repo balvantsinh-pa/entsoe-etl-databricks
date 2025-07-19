@@ -1,6 +1,7 @@
 """
 Data transformation module for ENTSOE ETL pipeline.
 Handles UTC time normalization, DST conversion, and data cleaning.
+Updated for new schema with reserve_type and amount_mw columns.
 """
 
 import logging
@@ -21,6 +22,7 @@ class DataTransformer:
     def transform_balancing_reserves(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Transform and clean balancing reserves data.
+        Updated for new schema with reserve_type and amount_mw.
         
         Args:
             df: Raw balancing reserves DataFrame
@@ -44,13 +46,14 @@ class DataTransformer:
             )
             
             # Clean and validate numeric columns
-            df_transformed['volume_mw'] = df_transformed['volume_mw'].apply(safe_float)
+            df_transformed['amount_mw'] = df_transformed['amount_mw'].apply(safe_float)
+            df_transformed['price_eur'] = df_transformed['price_eur'].apply(safe_float)
             
             # Remove rows with invalid data
             df_transformed = self._remove_invalid_records(df_transformed, 'balancing_reserves')
             
-            # Add created_at timestamp
-            df_transformed['created_at'] = datetime.now(timezone.utc)
+            # Add inserted_at timestamp
+            df_transformed['inserted_at'] = datetime.now(timezone.utc)
             
             # Sort by datetime
             df_transformed = df_transformed.sort_values('datetime_utc').reset_index(drop=True)
@@ -93,8 +96,8 @@ class DataTransformer:
             # Remove rows with invalid data
             df_transformed = self._remove_invalid_records(df_transformed, 'day_ahead_prices')
             
-            # Add created_at timestamp
-            df_transformed['created_at'] = datetime.now(timezone.utc)
+            # Add inserted_at timestamp
+            df_transformed['inserted_at'] = datetime.now(timezone.utc)
             
             # Sort by datetime
             df_transformed = df_transformed.sort_values('datetime_utc').reset_index(drop=True)
@@ -127,13 +130,13 @@ class DataTransformer:
         
         # Data type specific cleaning
         if data_type == 'balancing_reserves':
-            # Remove rows with missing product
-            df_clean = df_clean.dropna(subset=['product'])
+            # Remove rows with missing reserve_type
+            df_clean = df_clean.dropna(subset=['reserve_type'])
             
-            # Remove rows with invalid volume (negative or zero)
+            # Remove rows with invalid amount (negative or zero)
             df_clean = df_clean[
-                (df_clean['volume_mw'].notna()) & 
-                (df_clean['volume_mw'] > 0)
+                (df_clean['amount_mw'].notna()) & 
+                (df_clean['amount_mw'] > 0)
             ]
         
         elif data_type == 'day_ahead_prices':
@@ -146,7 +149,7 @@ class DataTransformer:
         # Remove duplicates based on key columns
         if data_type == 'balancing_reserves':
             df_clean = df_clean.drop_duplicates(
-                subset=['country_code', 'datetime_utc', 'product'],
+                subset=['country_code', 'datetime_utc', 'reserve_type'],
                 keep='last'
             )
         elif data_type == 'day_ahead_prices':
@@ -178,9 +181,9 @@ class DataTransformer:
         
         # Check required columns
         if data_type == 'balancing_reserves':
-            required_columns = ['country_code', 'datetime_utc', 'product', 'volume_mw', 'created_at']
+            required_columns = ['country_code', 'datetime_utc', 'reserve_type', 'amount_mw', 'inserted_at']
         elif data_type == 'day_ahead_prices':
-            required_columns = ['country_code', 'datetime_utc', 'price_eur_per_mwh', 'created_at']
+            required_columns = ['country_code', 'datetime_utc', 'price_eur_per_mwh', 'inserted_at']
         else:
             self.logger.error(f"Unknown data type: {data_type}")
             return False
@@ -238,11 +241,11 @@ class DataTransformer:
         # Data type specific statistics
         if data_type == 'balancing_reserves':
             summary['summary_stats'] = {
-                'unique_products': df['product'].nunique(),
-                'volume_stats': {
-                    'mean': df['volume_mw'].mean(),
-                    'min': df['volume_mw'].min(),
-                    'max': df['volume_mw'].max()
+                'unique_reserve_types': df['reserve_type'].nunique(),
+                'amount_stats': {
+                    'mean': df['amount_mw'].mean(),
+                    'min': df['amount_mw'].min(),
+                    'max': df['amount_mw'].max()
                 }
             }
         elif data_type == 'day_ahead_prices':
