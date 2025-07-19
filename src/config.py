@@ -8,7 +8,8 @@ import os
 import json
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import validator
 
 # Load environment variables from .env file (only if it exists)
 if os.path.exists('.env'):
@@ -125,6 +126,7 @@ def get_country_info(country_code: str = None) -> Dict[str, Any]:
     
     return {
         'code': country_code,
+        'eic': country_info.get('eic_code'),  # Map eic_code to eic
         **country_info
     }
 
@@ -149,6 +151,21 @@ def get_api_endpoints() -> Dict[str, str]:
     """
     config = load_country_config()
     return config.get('api_endpoints', {})
+
+
+def get_databricks_info() -> Dict[str, Any]:
+    """
+    Get Databricks environment information.
+    
+    Returns:
+        Dictionary with Databricks info
+    """
+    return {
+        'workspace_url': os.environ.get('DATABRICKS_WORKSPACE_URL'),
+        'cluster_id': os.environ.get('DATABRICKS_CLUSTER_ID'),
+        'runtime_version': os.environ.get('DATABRICKS_RUNTIME_VERSION'),
+        'is_databricks': settings.is_databricks
+    }
 
 
 # Global settings instance

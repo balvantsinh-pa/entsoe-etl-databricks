@@ -28,7 +28,7 @@ class ENTSOEAPIClient:
         # Set country configuration
         self.country_info = get_country_info(country_code)
         self.country_code = self.country_info['code']
-        self.country_eic = self.country_info['eic_code']
+        self.country_eic = self.country_info['eic']
         self.timezone_str = self.country_info['timezone']
         
         # Get API endpoints
